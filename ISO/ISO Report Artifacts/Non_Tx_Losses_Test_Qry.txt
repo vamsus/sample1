@@ -1,0 +1,111 @@
+WITH polnum AS (
+    SELECT
+        mqpo.display_policy_number,
+        mqpo.revision_number
+    FROM
+        mic_policy_am.vw_mis_quote_policies mqpo
+        JOIN (
+            SELECT
+                mqp.display_policy_number,
+                MAX(revision_number) AS revnum
+            FROM
+                mic_policy_am.vw_mis_quote_policies mqp
+            WHERE
+                    upper(mqp.entity_type) = 'POLICY'
+                AND
+                    upper(mqp.booking_status) = 'COMPLETE'
+            GROUP BY
+                mqp.display_policy_number
+        ) maxrevfinder ON
+            mqpo.display_policy_number = maxrevfinder.display_policy_number
+        AND
+            mqpo.revision_number = maxrevfinder.revnum
+)
+,lossPaid as (SELECT DISTINCT trans.CLAIM_ID,trans.CLAIM_NO,trans.FEATURE_ID,trans.FEATURE_NO,trans.COVERAGE_ID
+				,trans.ACTIVITY_CODE,trans.ACTIVITY_TYPE,trans.PAID as Amount
+				,trans.CHECK_ID,trans.DED_AMOUNT,NVL(trans.MODIFIED_DATE,trans.CREATION_DATE) as Transaction_Date 
+				,ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1) as Report_Date
+				,clm.LOSS_DATE,clm.REPORTED_DATE,clm.CAUSE_OF_LOSS, clm.COMPANY,mqp.COMPANY_NAME
+				,pol.STATE, lobCI.C_PROP_TYPE_CODE, lobCI.C_PROP_TYPE
+				,trans.COVERAGE_CODE,addr.ZIP_CODE, addr.COUNTY, addr.CITY,pol.POLICY_NO
+				,pol.INCEPTION_DATE, 6 as TransactionType
+				FROM CLAIMS_CONTENT.C_TRANSACTION trans
+				JOIN CLAIMS_CONTENT.C_CLAIM clm ON clm.ID = trans.CLAIM_ID
+				JOIN CLAIMS_CONTENT.C_POLICY pol ON pol.CLAIM_ID = clm.ID
+				JOIN MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp ON mqp.DISPLAY_POLICY_NUMBER = pol.POLICY_NO
+				JOIN polnum ON polnum.display_policy_number = mqp.DISPLAY_POLICY_NUMBER
+				  AND mqp.REVISION_NUMBER = polnum.revision_number
+				JOIN mic_policy_am.vw_mis_lob_ci lobCI ON mqp.gid = lobCI.policy_lob_ci
+				JOIN (SELECT ROW_NUMBER() OVER(PARTITION BY Claim_ID ORDER BY ADDRESS_LEVEL_ID ASC) AS num, 
+					  ZIP_CODE, COUNTY, CITY, CLAIM_ID, ADDRESS_LEVEL_ID
+						FROM CLAIMS_CONTENT.C_ADDRESS_DETAILS WHERE ADDRESS_TYPE='LOCATION'
+					 ) addr ON addr.CLAIM_ID = clm.ID AND addr.NUM = 1
+				WHERE trans.TRANS_STATUS='PROCESSED'
+				AND trans.ACTIVITY_CODE = '2002001'
+				AND trans.ACTIVITY_TYPE = 'PAYMENT'
+				AND trunc(ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1)) >= TO_DATE(TO_CHAR('01-04-2018'),'DD-MM-YYYY')  
+				AND trunc(ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1)) <= TO_DATE(TO_CHAR('01-06-2018'),'DD-MM-YYYY')
+				
+				)
+,lossReserve as (SELECT DISTINCT trans.CLAIM_ID,trans.CLAIM_NO,trans.FEATURE_ID,trans.FEATURE_NO,trans.COVERAGE_ID
+				,trans.ACTIVITY_CODE,trans.ACTIVITY_TYPE,trans.ALLOCATED as Amount
+				,trans.CHECK_ID,trans.DED_AMOUNT,NVL(trans.MODIFIED_DATE,trans.CREATION_DATE) as Transaction_Date 
+				,ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1) as Report_Date
+				,clm.LOSS_DATE,clm.REPORTED_DATE,clm.CAUSE_OF_LOSS, clm.COMPANY,mqp.COMPANY_NAME
+				,pol.STATE, lobCI.C_PROP_TYPE_CODE, lobCI.C_PROP_TYPE
+				,trans.COVERAGE_CODE,addr.ZIP_CODE, addr.COUNTY, addr.CITY,pol.POLICY_NO
+				,pol.INCEPTION_DATE, 7 as TransactionType
+				FROM CLAIMS_CONTENT.C_TRANSACTION trans
+				JOIN CLAIMS_CONTENT.C_CLAIM clm ON clm.ID = trans.CLAIM_ID
+				JOIN CLAIMS_CONTENT.C_POLICY pol ON pol.CLAIM_ID = clm.ID
+				JOIN MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp ON mqp.DISPLAY_POLICY_NUMBER = pol.POLICY_NO
+				JOIN polnum ON polnum.display_policy_number = mqp.DISPLAY_POLICY_NUMBER
+				  AND mqp.REVISION_NUMBER = polnum.revision_number
+				JOIN mic_policy_am.vw_mis_lob_ci lobCI ON mqp.gid = lobCI.policy_lob_ci
+				JOIN (SELECT ROW_NUMBER() OVER(PARTITION BY Claim_ID ORDER BY ADDRESS_LEVEL_ID ASC) AS num, 
+					  ZIP_CODE, COUNTY, CITY, CLAIM_ID, ADDRESS_LEVEL_ID
+						FROM CLAIMS_CONTENT.C_ADDRESS_DETAILS WHERE ADDRESS_TYPE='LOCATION'
+					 ) addr ON addr.CLAIM_ID = clm.ID AND addr.NUM = 1
+				WHERE trans.TRANS_STATUS='PROCESSED'
+				AND trans.ACTIVITY_CODE = '2001001'
+				AND trans.ACTIVITY_TYPE = 'RESERVE'
+--				AND trunc(ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1)) >= TO_DATE(TO_CHAR('01-07-2018'),'DD-MM-YYYY')  
+				AND trunc(ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1)) = TO_DATE(TO_CHAR('01-06-2018'),'DD-MM-YYYY')
+				)
+,lossRecovery as (SELECT DISTINCT trans.CLAIM_ID,trans.CLAIM_NO,trans.FEATURE_ID,trans.FEATURE_NO,trans.COVERAGE_ID
+				,trans.ACTIVITY_CODE,trans.ACTIVITY_TYPE,trans.RECOVERED as Amount
+				,trans.CHECK_ID,trans.DED_AMOUNT,NVL(trans.MODIFIED_DATE,trans.CREATION_DATE) as Transaction_Date 
+				,ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1) as Report_Date
+				,clm.LOSS_DATE,clm.REPORTED_DATE,clm.CAUSE_OF_LOSS, clm.COMPANY,mqp.COMPANY_NAME
+				,pol.STATE, lobCI.C_PROP_TYPE_CODE, lobCI.C_PROP_TYPE
+				,trans.COVERAGE_CODE,addr.ZIP_CODE, addr.COUNTY, addr.CITY,pol.POLICY_NO
+				,pol.INCEPTION_DATE, 4 as TransactionType
+				FROM CLAIMS_CONTENT.C_TRANSACTION trans
+				JOIN CLAIMS_CONTENT.C_CLAIM clm ON clm.ID = trans.CLAIM_ID
+				JOIN CLAIMS_CONTENT.C_POLICY pol ON pol.CLAIM_ID = clm.ID
+				JOIN MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp ON mqp.DISPLAY_POLICY_NUMBER = pol.POLICY_NO
+				JOIN polnum ON polnum.display_policy_number = mqp.DISPLAY_POLICY_NUMBER
+				  AND mqp.REVISION_NUMBER = polnum.revision_number
+				JOIN mic_policy_am.vw_mis_lob_ci lobCI ON mqp.gid = lobCI.policy_lob_ci
+				JOIN (SELECT ROW_NUMBER() OVER(PARTITION BY Claim_ID ORDER BY ADDRESS_LEVEL_ID ASC) AS num, 
+					  ZIP_CODE, COUNTY, CITY, CLAIM_ID, ADDRESS_LEVEL_ID
+						FROM CLAIMS_CONTENT.C_ADDRESS_DETAILS WHERE ADDRESS_TYPE='LOCATION'
+					 ) addr ON addr.CLAIM_ID = clm.ID AND addr.NUM = 1
+				WHERE trans.TRANS_STATUS='PROCESSED'
+				AND trans.ACTIVITY_CODE = '2003004'
+				AND trans.ACTIVITY_TYPE = 'RECOVERY'
+				AND trunc(ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1)) >= TO_DATE(TO_CHAR('01-04-2018'),'DD-MM-YYYY')  
+				AND trunc(ADD_MONTHS((LAST_DAY(NVL(trans.MODIFIED_DATE,trans.CREATION_DATE))+1),-1)) <= TO_DATE(TO_CHAR('01-06-2018'),'DD-MM-YYYY')
+				)
+	
+  ,result as ( SELECT * FROM lossPaid
+  UNION ALL
+  SELECT * FROM lossReserve
+  UNION ALL
+  SELECT * FROM lossRecovery)
+  SELECT CLAIM_NO,SUM(Amount),TransactionType FROM result
+  WHERE STATE <> 'TX'
+  GROUP BY  Company,Loss_Date,State,Policy_NO,County,CITY,Zip_Code,C_PROP_TYPE_CODE,Claim_NO,
+	CAUSE_OF_LOSS,Coverage_CODE,
+	Inception_Date, TransactionType
+	HAVING SUM(Amount) <> 0 

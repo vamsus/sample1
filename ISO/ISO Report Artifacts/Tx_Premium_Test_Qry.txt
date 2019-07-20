@@ -1,0 +1,203 @@
+WITH PolNum AS (SELECT
+  mqpo.display_policy_number AS DISPLAY_POLICY_NUMBER,
+  mqpo.revision_number revnum,
+  mqpo.ENTITY_REFERENCE AS ENTITY_REFERENCE
+FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqpo
+JOIN (SELECT
+  mqp.display_policy_number,
+  MAX(revision_number) AS revnum
+FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+WHERE UPPER(mqp.ENTITY_TYPE) = 'POLICY'
+AND UPPER(mqp.BOOKING_STATUS) = 'COMPLETE'
+AND trunc(mqp.TRANS_ACCOUNTING_DATE) >= TO_DATE(TO_CHAR('01-04-2018'),'DD-MM-YYYY')  
+AND trunc(mqp.TRANS_ACCOUNTING_DATE) <= TO_DATE(TO_CHAR('30-06-2018'),'DD-MM-YYYY')
+AND trunc(mqp.EFFECTIVE_DATE) <= TO_DATE(TO_CHAR('30-06-2018'),'DD-MM-YYYY')
+GROUP BY mqp.DISPLAY_POLICY_NUMBER) maxrevfinder
+  ON mqpo.display_policy_number = maxrevfinder.display_policy_number
+  AND mqpo.revision_number = maxrevfinder.revnum)
+
+,details as (SELECT mqp.display_policy_number,loc.LOCATION_NO,cov.COVERAGE FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+  JOIN PolNum ON PolNum.display_policy_number = mqp.display_policy_number
+    AND mqp.REVISION_NUMBER = PolNum.revnum 
+  JOIN MIC_POLICY_AM.VW_MIS_LOB_CI lobCI
+   ON mqp.GID = lobCI.POLICY_LOB_CI
+  JOIN MIC_POLICY_AM.VW_MIS_LOCATIONS loc
+    ON lobCI.GID = loc.C_LOB_LOCATIONS
+  JOIN MIC_POLICY_AM.VW_MIS_ADDRESSES addr
+    ON addr.FK_COLUMN_VALUE = loc.GID 
+  JOIN MIC_POLICY_AM.VW_MIS_C_CI_BUILDINGS bldg ON bldg.c_lob_buildings = lobCI.GID
+    AND loc.GID=bldg.C_BUILDING_LOCATION_ID
+  JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+    AND UPPER(cov.COVERAGE) IN ('BUILDING_COVERAGE', 'CONTENT_COVERAGE', 'BUSINESS_INCOME')
+  WHERE UPPER(addr.FK_COLUMN_NAME)='LOCATION_ADDRESS'
+  AND UPPER(addr.STATE_CODE) = 'TX'
+  GROUP BY mqp.display_policy_number,loc.LOCATION_NO,cov.COVERAGE
+  )
+,bg1 as (SELECT mqp.DISPLAY_POLICY_NUMBER,'Building Coverage Group1' as Category
+  ,SUM(cov.TRANSACTION_PREMIUM) as Prem,details.LOCATION_NO
+  FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+JOIN PolNum ON PolNum.display_policy_number = mqp.display_policy_number
+  AND  mqp.REVISION_NUMBER <= PolNum.revnum 
+JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+JOIN details ON details.display_policy_number = mqp.display_policy_number
+  AND details.LOCATION_NO = cov.LOCATION_NO
+  AND details.COVERAGE = cov.COVERAGE
+WHERE UPPER(cov.COVERAGE) IN ('BUILDING_COVERAGE')
+  AND UPPER(PERIL) IN ('GROUP I','GROUP II','GROUP II WIND')
+  --AND SUM(cov.TRANSACTION_PREMIUM) <> 0
+  GROUP BY mqp.DISPLAY_POLICY_NUMBER,details.LOCATION_NO
+ORDER BY mqp.DISPLAY_POLICY_NUMBER)
+
+
+,bg2 as (SELECT  mqp.DISPLAY_POLICY_NUMBER,'Building Coverage Group2'  as Category
+  ,SUM(cov.TRANSACTION_PREMIUM) as Prem,details.LOCATION_NO
+FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+JOIN PolNum ON PolNum.display_policy_number = mqp.display_policy_number
+  AND  mqp.REVISION_NUMBER <= PolNum.revnum 
+JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+JOIN details ON details.display_policy_number = mqp.display_policy_number
+  AND details.LOCATION_NO = cov.LOCATION_NO
+  AND details.COVERAGE = cov.COVERAGE
+WHERE UPPER(cov.COVERAGE) IN ('BUILDING_COVERAGE')
+  AND UPPER(PERIL) IN ('HURRICANE')
+  AND (cov.TRANSACTION_PREMIUM) <> 0
+  GROUP BY mqp.DISPLAY_POLICY_NUMBER,details.LOCATION_NO
+ORDER BY mqp.DISPLAY_POLICY_NUMBER)
+  
+,cg1 as (SELECT  mqp.DISPLAY_POLICY_NUMBER,'Content Coverage Group 1' as Category
+  ,SUM(cov.TRANSACTION_PREMIUM) as Prem,details.LOCATION_NO
+FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+JOIN PolNum ON PolNum.display_policy_number = mqp.display_policy_number
+  AND mqp.REVISION_NUMBER <= PolNum.revnum 
+JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+JOIN details ON details.display_policy_number = mqp.display_policy_number
+  AND details.LOCATION_NO = cov.LOCATION_NO
+  AND details.COVERAGE = cov.COVERAGE
+WHERE UPPER(cov.COVERAGE) IN ('CONTENT_COVERAGE')
+  AND UPPER(PERIL) IN ('GROUP I','GROUP II','GROUP II WIND')
+  AND (cov.TRANSACTION_PREMIUM) <> 0
+  GROUP BY mqp.DISPLAY_POLICY_NUMBER,details.LOCATION_NO
+ORDER BY mqp.DISPLAY_POLICY_NUMBER)
+
+,cg2 as (SELECT  mqp.DISPLAY_POLICY_NUMBER,'Content Coverage Group 2' as Category
+  ,SUM(cov.TRANSACTION_PREMIUM) as Prem,details.LOCATION_NO
+FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+JOIN PolNum ON PolNum.display_policy_number = mqp.display_policy_number
+  AND mqp.REVISION_NUMBER <= PolNum.revnum
+JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+JOIN details ON details.display_policy_number = mqp.display_policy_number
+  AND details.LOCATION_NO = cov.LOCATION_NO
+  AND details.COVERAGE = cov.COVERAGE
+WHERE cov.COVERAGE IN ('CONTENT_COVERAGE')
+  AND UPPER(PERIL) IN ('HURRICANE')
+  AND (cov.TRANSACTION_PREMIUM) <> 0
+  GROUP BY mqp.DISPLAY_POLICY_NUMBER,details.LOCATION_NO
+ORDER BY mqp.DISPLAY_POLICY_NUMBER)
+
+,bi as (SELECT  mqp.DISPLAY_POLICY_NUMBER,'Business Income' as Category
+  ,SUM(cov.TRANSACTION_PREMIUM) as Prem,details.LOCATION_NO
+FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+JOIN PolNum ON PolNum.display_policy_number = mqp.display_policy_number
+  AND mqp.REVISION_NUMBER <= PolNum.revnum
+JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+JOIN details ON details.display_policy_number = mqp.display_policy_number
+  AND details.LOCATION_NO = cov.LOCATION_NO
+  AND details.COVERAGE = cov.COVERAGE
+WHERE cov.COVERAGE IN ('BUSINESS_INCOME')
+  AND (cov.TRANSACTION_PREMIUM) <> 0
+  GROUP BY mqp.DISPLAY_POLICY_NUMBER,details.LOCATION_NO
+ORDER BY mqp.DISPLAY_POLICY_NUMBER)
+,result as(SELECT DISPLAY_POLICY_NUMBER,category,Prem,LOCATION_NO FROM bg1
+  UNION ALL
+  SELECT DISPLAY_POLICY_NUMBER,category
+    ,Prem,LOCATION_NO 
+    FROM bg2
+  UNION ALL
+  SELECT DISPLAY_POLICY_NUMBER,category
+    ,Prem,LOCATION_NO 
+    FROM cg1
+  UNION ALL
+  SELECT DISPLAY_POLICY_NUMBER
+    ,category,Prem,LOCATION_NO 
+    FROM cg2
+  UNION ALL
+  SELECT DISPLAY_POLICY_NUMBER,category
+  ,Prem,LOCATION_NO 
+  FROM bi)
+
+  SELECT DISTINCT DISPLAY_POLICY_NUMBER,category,LOCATION_NO,Prem FROM result
+    WHERE 1 = CASE 
+                  WHEN category = 'Building Coverage Group1' THEN 1
+                  WHEN category <> 'Building Coverage Group1' AND Prem <> 0 THEN 1
+                  ELSE 0
+              END
+  ORDER BY DISPLAY_POLICY_NUMBER
+  
+  
+-- To get the business income prem amt
+--SELECT DISTINCT mqp.DISPLAY_POLICY_NUMBER
+-- ,SUM(cov.TRANSACTION_PREMIUM) as PremiumAmount
+--FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+--JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+--  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+--WHERE COVERAGE IN ('BUILDING_COVERAGE','OUTPROP_COVERAGE')
+--  AND UPPER(PERIL) IN ('GROUP I', 'GROUP II', 'GROUP II WIND')
+--  AND mqp.display_policy_number = 'CI-TX-004993-000'
+--  AND mqp.REVISION_NUMBER <= 0
+--  AND mqp.ENTITY_TYPE = 'POLICY'
+--  GROUP BY mqp.DISPLAY_POLICY_NUMBER
+
+--('EQUIP_BRK_COVERAGE', 'EQUIP_BRK_COVERAGE-BTM')
+--('ORD_LAW_EXT_COVERAGE', 'SWERBKP_BI_COVERAGE','SWERBKP_PROP_COVERAGE')
+--('TERRORISM_COV')
+
+-- To get additional coverages prem amount
+--SELECT DISTINCT mqp.DISPLAY_POLICY_NUMBER
+-- ,SUM(cov.TRANSACTION_PREMIUM) as PremiumAmount
+--FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+--JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+--  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+--WHERE COVERAGE IN ('ORD_LAW_EXT_COVERAGE', 'SWERBKP_BI_COVERAGE','SWERBKP_PROP_COVERAGE')
+--  AND mqp.display_policy_number = 'CI-TX-004993-000'
+--  AND mqp.REVISION_NUMBER <= 0
+--  AND mqp.ENTITY_TYPE = 'POLICY'
+--  GROUP BY mqp.DISPLAY_POLICY_NUMBER
+
+-- To get equipment break down prem amount
+--SELECT DISTINCT mqp.DISPLAY_POLICY_NUMBER
+-- ,SUM(cov.TRANSACTION_PREMIUM) as PremiumAmount
+--FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+--JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+--  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+--WHERE COVERAGE IN ('EQUIP_BRK_COVERAGE', 'EQUIP_BRK_COVERAGE-BTM')
+--  AND mqp.display_policy_number = 'CI-TX-004993-000'
+--  AND mqp.REVISION_NUMBER <= 0
+--  AND mqp.ENTITY_TYPE = 'POLICY'
+--  GROUP BY mqp.DISPLAY_POLICY_NUMBER
+
+-- To get terrorism prem amount
+--SELECT DISTINCT mqp.DISPLAY_POLICY_NUMBER
+-- ,SUM(cov.TRANSACTION_PREMIUM) as PremiumAmount
+--FROM MIC_POLICY_AM.VW_MIS_QUOTE_POLICIES mqp
+--JOIN MIC_POLICY_AM.VW_MIS_CI_ALL_COVERAGES cov
+--  ON cov.ENTITY_REFERENCE = mqp.ENTITY_REFERENCE
+--WHERE COVERAGE IN ('TERRORISM_COV')
+--  AND mqp.display_policy_number = 'CI-TX-004993-000'
+--  AND mqp.REVISION_NUMBER <= 0
+--  AND mqp.ENTITY_TYPE = 'POLICY'
+--  GROUP BY mqp.DISPLAY_POLICY_NUMBER
+
+--To get max location num
+--SELECT
+--mqp.display_policy_number,MAX(loc.LOCATION_NO) as locNum
+--FROM
+--  MIC_POLICY_AM.vw_mis_quote_policies mqp
+--JOIN MIC_POLICY_AM.vw_mis_lob_ci lobCI ON mqp.gid = lobCI.policy_lob_ci
+--JOIN MIC_POLICY_AM.VW_MIS_LOCATIONS loc ON loc.c_lob_locations = lobCI.GID
+--WHERE mqp.display_policy_number = 'CI-TX-004993-000'
+--AND mqp.REVISION_NUMBER = 0

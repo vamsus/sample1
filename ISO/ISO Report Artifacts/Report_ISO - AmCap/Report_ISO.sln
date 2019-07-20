@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{159641D6-6404-4A2A-AE62-294DE0FE8301}") = "Report_ISO", "Report_ISO\Report_ISO.dtproj", "{612F09A3-B28A-47B1-A803-C92ED9EA4AAB}"
+EndProject
+Global
+	GlobalSection(TeamFoundationVersionControl) = preSolution
+		SccNumberOfProjects = 2
+		SccEnterpriseProvider = {4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}
+		SccTeamFoundationServer = http://asi-bapm-vc:8080/tfs/cosmos
+		SccLocalPath0 = .
+		SccProjectUniqueName1 = Report_ISO\\Report_ISO.dtproj
+		SccProjectName1 = Report_ISO
+		SccLocalPath1 = Report_ISO
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Development|Default = Development|Default
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{612F09A3-B28A-47B1-A803-C92ED9EA4AAB}.Development|Default.ActiveCfg = Development
+		{612F09A3-B28A-47B1-A803-C92ED9EA4AAB}.Development|Default.Build.0 = Development
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
